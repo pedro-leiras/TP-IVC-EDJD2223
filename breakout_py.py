@@ -134,7 +134,7 @@ class Game(tk.Frame):
                          lambda _: self.paddle.move(-10))
         self.canvas.bind('<Right>',
                          lambda _: self.paddle.move(10))
-        cv_setup(self)
+        start(self)
 
     def setup_game(self):
            self.add_ball()
