@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 cap = cv2.VideoCapture()
-image_inverted = 0
+image_inverted = np.array([])
 window_camera_name = "Camera"
 hsv_color = np.array([])
 
@@ -10,22 +10,22 @@ def start(game):
     cv2.namedWindow(window_camera_name)
     camera(game)
 
-def getRGB(event, x, y,flags,param):
-    global hsv_color
+def getHSVColorFromMouseClick(event, x, y,flags,param):
+    global hsv_color, image_inverted
+
     if event == cv2.EVENT_LBUTTONDOWN:
-        colorsB = image_inverted[y, x, 0]
-        colorsG = image_inverted[y, x, 1]
-        colorsR = image_inverted[y, x, 2]
-        colors = image_inverted[y, x]
-        hsv_value = np.uint8([[[colorsB, colorsG, colorsR]]])
-        hsv_color = cv2.cvtColor(hsv_value, cv2.COLOR_BGR2HSV)
+        B = image_inverted[y, x, 0]
+        G = image_inverted[y, x, 1]
+        R = image_inverted[y, x, 2]
+        bgr = image_inverted[y, x]
+        bgr_array = np.uint8([[[B, G, R]]])
+        hsv_color = cv2.cvtColor(bgr_array, cv2.COLOR_BGR2HSV)
         print("HSV : ", hsv_color)
-        print("Color: ", colors)
+        print("BGR: ", bgr)
 
 
 def camera(game):
-    global image_inverted
-    global hsv_color
+    global image_inverted, hsv_color
 
     if not cap.isOpened():
         cap.open(0)
@@ -34,15 +34,15 @@ def camera(game):
     cv2.imshow(window_camera_name, image_inverted)
 
     if hsv_color.size == 0:
-        cv2.setMouseCallback(window_camera_name, getRGB)
+        cv2.setMouseCallback(window_camera_name, getHSVColorFromMouseClick)
     else:
         cv2.setMouseCallback(window_camera_name, lambda *args : None)
         image_hsv = cv2.cvtColor(image_inverted, cv2.COLOR_BGR2HSV)
         h = hsv_color[:, :, 0]
         s = hsv_color[:, :, 1]
         v = hsv_color[:, :, 2]
-        HSV_MIN = np.array([h - 30, s - 30, v - 30])
-        HSV_MAX = np.array([h + 30, s + 30, v + 30])
+        HSV_MIN = np.array([h - 30, s - 40, v - 40])
+        HSV_MAX = np.array([h + 30, s + 40, v + 40])
         mask = cv2.inRange(image_hsv, HSV_MIN, HSV_MAX)
         output = cv2.bitwise_and(image_inverted, image_inverted, mask=mask)
         cv2.imshow('output', output)
@@ -51,21 +51,14 @@ def camera(game):
         cv2.drawContours(image=img_contours, contours=contours, contourIdx=-1, color=1, thickness=-1,
                          hierarchy=hierarchy, maxLevel=1)
 
+        M = cv2.moments(contours[0])
+        if M['m00'] != 0:
+            cx = int(M['m10'] / M['m00'])
+            cy = int(M['m01'] / M['m00'])
+            cv2.circle(img_contours, (cx, cy), 7, (0, 0, 255), -1)
+            print(f"x: {cx} y: {cy}")
+            x = image_inverted.shape
         cv2.imshow("Contours", img_contours * 255)
-        img_contour0 = np.zeros(image_inverted.shape, dtype=np.uint8)
-        cv2.drawContours(image=img_contour0, contours=contours, contourIdx=-1, color=(0, 0, 255), thickness=-1)
-        cv2.imshow("Contour 0", img_contour0)
-
-        cnt = contours[0]
-        M = cv2.moments(cnt)
-        print(M)
-        cx = int(M['m10'] / M['m00'])
-        cy = int(M['m01'] / M['m00'])
-        print("cx:", cx, ";  cy:", cy)
-        area = cv2.contourArea(cnt)
-        print("area:", area)
-        perimeter = cv2.arcLength(cnt, True)
-        print("perimeter:", perimeter)
 
     cv2.waitKey(1)
     game.after(1, camera, game)
