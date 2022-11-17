@@ -38,11 +38,48 @@ def camera(game):
     else:
         cv2.setMouseCallback(window_camera_name, lambda *args : None)
         image_hsv = cv2.cvtColor(image_inverted, cv2.COLOR_BGR2HSV)
-        h = hsv_color[:, :, 0]
-        s = hsv_color[:, :, 1]
-        v = hsv_color[:, :, 2]
-        HSV_MIN = np.array([h - 30, s - 40, v - 40])
-        HSV_MAX = np.array([h + 30, s + 40, v + 40])
+        hsv_color_copy = hsv_color.copy()
+        h = hsv_color_copy[:, :, 0].copy()
+        s = hsv_color_copy[:, :, 1].copy()
+        v = hsv_color_copy[:, :, 2].copy()
+
+        if h <= 30:
+            h[:, 0] = 0
+        else:
+            h -= 30
+
+        if s <= 40:
+            s[:, 0] = 0
+        else:
+            s -= 40
+
+        if v <= 40:
+            v[:, 0] = 0
+        else:
+            v -= 40
+
+        HSV_MIN = np.array([h, s, v])
+        h = hsv_color_copy[:, :, 0].copy()
+        s = hsv_color_copy[:, :, 1].copy()
+        v = hsv_color_copy[:, :, 2].copy()
+
+        if h >= 150:
+            h[:, 0] = 180
+        else:
+            h += 30
+
+        if s >= 215:
+            s[:, 0] = 255
+        else:
+            s += 40
+
+        if v >= 215:
+            v[:, 0] = 255
+        else:
+            v += 40
+
+        HSV_MAX = np.array([h, s, v])
+
         mask = cv2.inRange(image_hsv, HSV_MIN, HSV_MAX)
         output = cv2.bitwise_and(image_inverted, image_inverted, mask=mask)
         cv2.imshow('output', output)
@@ -51,13 +88,18 @@ def camera(game):
         cv2.drawContours(image=img_contours, contours=contours, contourIdx=-1, color=1, thickness=-1,
                          hierarchy=hierarchy, maxLevel=1)
 
-        M = cv2.moments(contours[0])
-        if M['m00'] != 0:
-            cx = int(M['m10'] / M['m00'])
-            cy = int(M['m01'] / M['m00'])
-            cv2.circle(img_contours, (cx, cy), 7, (0, 0, 255), -1)
-            print(f"x: {cx} y: {cy}")
-            x = image_inverted.shape
+        if contours:
+            M = cv2.moments(contours[0])
+            if M['m00'] != 0:
+                cx = int(M['m10'] / M['m00'])
+                cy = int(M['m01'] / M['m00'])
+                cv2.circle(img_contours, (cx, cy), 7, (0, 0, 255), -1)
+                print(f"x: {cx} y: {cy}")
+                x = image_inverted.shape
+                if(cx < x[0]/2):
+                    game.paddle.move(-10)
+                else:
+                    game.paddle.move(10)
         cv2.imshow("Contours", img_contours * 255)
 
     cv2.waitKey(1)
