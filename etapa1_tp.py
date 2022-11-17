@@ -1,106 +1,148 @@
 import cv2
 import numpy as np
 
-cap = cv2.VideoCapture()
-image_inverted = np.array([])
-window_camera_name = "Camera"
-hsv_color = np.array([])
+window_camera = "Camera"
+window_contours = "Contours"
+window_threshed = "Image Threshed"
+hsv_color = None
+h_margin = 30
+s_margin = 40
+v_margin = 40
+
 
 def start(game):
-    cv2.namedWindow(window_camera_name)
-    camera(game)
-
-def getHSVColorFromMouseClick(event, x, y,flags,param):
-    global hsv_color, image_inverted
-
-    if event == cv2.EVENT_LBUTTONDOWN:
-        B = image_inverted[y, x, 0]
-        G = image_inverted[y, x, 1]
-        R = image_inverted[y, x, 2]
-        bgr = image_inverted[y, x]
-        bgr_array = np.uint8([[[B, G, R]]])
-        hsv_color = cv2.cvtColor(bgr_array, cv2.COLOR_BGR2HSV)
-        print("HSV : ", hsv_color)
-        print("BGR: ", bgr)
+    cap = cv2.VideoCapture()
+    cv2.namedWindow(window_camera)
+    camera(cap, game)
 
 
-def camera(game):
-    global image_inverted, hsv_color
-
+def camera(cap, game):
     if not cap.isOpened():
         cap.open(0)
     ret, image = cap.read()
     image_inverted = image[:, ::-1, :]
-    cv2.imshow(window_camera_name, image_inverted)
 
-    if hsv_color.size == 0:
-        cv2.setMouseCallback(window_camera_name, getHSVColorFromMouseClick)
+    image_contours, image_threshed = processImage(image_inverted, game)
+    showImages(image_inverted, image_contours, image_threshed)
+
+    cv2.waitKey(1)
+    game.after(1, camera, cap, game)
+
+
+def getHSVColorFromMouseClick(event, x, y, flags, frame):
+    global hsv_color
+    if event == cv2.EVENT_LBUTTONDOWN:
+        B = frame[y, x, 0]
+        G = frame[y, x, 1]
+        R = frame[y, x, 2]
+        bgr = np.uint8([[[B, G, R]]])
+        hsv_color = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+        print("HSV: ", hsv_color)
+        print("BGR: ", bgr)
+
+
+def processImage(frame, game):
+    global hsv_color, window_camera
+
+    if hsv_color is None:
+        cv2.setMouseCallback(window_camera, getHSVColorFromMouseClick, frame)
     else:
-        cv2.setMouseCallback(window_camera_name, lambda *args : None)
-        image_hsv = cv2.cvtColor(image_inverted, cv2.COLOR_BGR2HSV)
-        hsv_color_copy = hsv_color.copy()
-        h = hsv_color_copy[:, :, 0].copy()
-        s = hsv_color_copy[:, :, 1].copy()
-        v = hsv_color_copy[:, :, 2].copy()
+        cv2.setMouseCallback(window_camera, lambda *args : None)
 
-        if h <= 30:
-            h[:, 0] = 0
-        else:
-            h -= 30
+        hsv_min = getHSVMin()
+        hsv_max = getHSVMax()
 
-        if s <= 40:
-            s[:, 0] = 0
-        else:
-            s -= 40
+        image_hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        mask = cv2.inRange(image_hsv, hsv_min, hsv_max)
+        image_threshed = cv2.bitwise_and(frame, frame, mask=mask)
 
-        if v <= 40:
-            v[:, 0] = 0
-        else:
-            v -= 40
-
-        HSV_MIN = np.array([h, s, v])
-        h = hsv_color_copy[:, :, 0].copy()
-        s = hsv_color_copy[:, :, 1].copy()
-        v = hsv_color_copy[:, :, 2].copy()
-
-        if h >= 150:
-            h[:, 0] = 180
-        else:
-            h += 30
-
-        if s >= 215:
-            s[:, 0] = 255
-        else:
-            s += 40
-
-        if v >= 215:
-            v[:, 0] = 255
-        else:
-            v += 40
-
-        HSV_MAX = np.array([h, s, v])
-
-        mask = cv2.inRange(image_hsv, HSV_MIN, HSV_MAX)
-        output = cv2.bitwise_and(image_inverted, image_inverted, mask=mask)
-        cv2.imshow('output', output)
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        img_contours = np.zeros(image_inverted.shape, dtype=np.uint8)
-        cv2.drawContours(image=img_contours, contours=contours, contourIdx=-1, color=1, thickness=-1,
+        image_contours = np.zeros(frame.shape, dtype=np.uint8)
+        cv2.drawContours(image=image_contours, contours=contours, contourIdx=-1, color=1, thickness=-1,
                          hierarchy=hierarchy, maxLevel=1)
 
         if contours:
-            M = cv2.moments(contours[0])
+            largerContour = contours[0]
+            for contour in contours:
+                if largerContour.size < contour.size:
+                    largerContour = contour
+
+            M = cv2.moments(largerContour)
             if M['m00'] != 0:
                 cx = int(M['m10'] / M['m00'])
                 cy = int(M['m01'] / M['m00'])
-                cv2.circle(img_contours, (cx, cy), 7, (0, 0, 255), -1)
+                cv2.circle(image_contours, (cx, cy), 7, (0, 0, 255), -1)
                 print(f"x: {cx} y: {cy}")
-                x = image_inverted.shape
-                if(cx < x[0]/2):
-                    game.paddle.move(-10)
-                else:
-                    game.paddle.move(10)
-        cv2.imshow("Contours", img_contours * 255)
+                image_width = frame.shape[0]
+                movePaddle(cx, image_width, game)
 
-    cv2.waitKey(1)
-    game.after(1, camera, game)
+        return image_contours, image_threshed
+
+    return None, None
+
+
+def getHSVMin():
+    global hsv_color, h_margin, s_margin, v_margin
+
+    h_min = hsv_color[:, :, 0].copy()
+    s_min = hsv_color[:, :, 1].copy()
+    v_min = hsv_color[:, :, 2].copy()
+
+    if h_min <= h_margin:
+        h_min[:, 0] = 0
+    else:
+        h_min -= h_margin
+
+    if s_min <= s_margin:
+        s_min[:, 0] = 0
+    else:
+        s_min -= s_margin
+
+    if v_min <= v_margin:
+        v_min[:, 0] = 0
+    else:
+        v_min -= v_margin
+
+    return np.array([h_min, s_min, v_min])
+
+
+def getHSVMax():
+    global hsv_color, h_margin, s_margin, v_margin
+
+    h_max = hsv_color[:, :, 0].copy()
+    s_max = hsv_color[:, :, 1].copy()
+    v_max = hsv_color[:, :, 2].copy()
+
+    if h_max >= (180 - h_margin):
+        h_max[:, 0] = 180
+    else:
+        h_max += h_margin
+
+    if s_max >= (255 - s_margin):
+        s_max[:, 0] = 255
+    else:
+        s_max += s_margin
+
+    if v_max >= (255 - v_margin):
+        v_max[:, 0] = 255
+    else:
+        v_max += v_margin
+
+    return np.array([h_max, s_max, v_max])
+
+
+def movePaddle(cx, image_width, game):
+    if cx < image_width / 2:
+        game.paddle.move(-5)
+    else:
+        game.paddle.move(5)
+
+
+def showImages(frame, image_contours, image_threshed):
+    global window_camera, window_contours, window_threshed
+
+    cv2.imshow(window_camera, frame)
+    if image_contours is not None:
+        cv2.imshow(window_contours, image_contours * 255)
+    if image_threshed is not None:
+        cv2.imshow(window_threshed, image_threshed)
