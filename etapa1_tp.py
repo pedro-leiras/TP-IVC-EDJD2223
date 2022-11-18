@@ -58,8 +58,7 @@ def processImage(frame, game):
 
         contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         image_contours = np.zeros(frame.shape, dtype=np.uint8)
-        cv2.drawContours(image=image_contours, contours=contours, contourIdx=-1, color=1, thickness=-1,
-                         hierarchy=hierarchy, maxLevel=1)
+        cv2.drawContours(image_contours, contours, -1, (0,255,0), 3)
 
         if contours:
             largerContour = contours[0]
@@ -73,8 +72,7 @@ def processImage(frame, game):
                 cy = int(M['m01'] / M['m00'])
                 cv2.circle(image_contours, (cx, cy), 7, (0, 0, 255), -1)
                 print(f"x: {cx} y: {cy}")
-                image_width = frame.shape[0]
-                movePaddle(cx, image_width, game)
+                movePaddle(cx, frame, image_contours, game)
 
         return image_contours, image_threshed
 
@@ -131,11 +129,29 @@ def getHSVMax():
     return np.array([h_max, s_max, v_max])
 
 
-def movePaddle(cx, image_width, game):
-    if cx < image_width / 2:
-        game.paddle.move(-5)
+def movePaddle(cx, frame, image_contours, game):
+    image_width = frame.shape[1]
+    image_height = frame.shape[0]
+    qhalf_width = int(image_width / 4)
+    deathzone = int(qhalf_width * 0.2)
+
+    cv2.line(image_contours, (qhalf_width, 0), (qhalf_width, image_height), (0, 0, 255), 5)
+    cv2.line(image_contours, (int(qhalf_width * 2 - deathzone / 2), 0),
+             (int(qhalf_width * 2 - deathzone / 2), image_height), (0, 0, 255), 5)
+    cv2.line(image_contours, (int(qhalf_width * 2 + deathzone / 2), 0),
+             (int(qhalf_width * 2 + deathzone / 2), image_height), (0, 0, 255), 5)
+    cv2.line(image_contours, (int(qhalf_width * 3), 0), (int(qhalf_width * 3), image_height), (0, 0, 255), 5)
+
+    if cx < qhalf_width:
+        game.paddle.move(-8)
+    elif (cx >= qhalf_width) & (cx < int(qhalf_width*2 - deathzone/2)):
+        game.paddle.move(-4)
+    elif (cx >= int(qhalf_width*2 - deathzone/2)) & (cx <= int(qhalf_width*2 + deathzone/2)):
+        game.paddle.move(0)
+    elif (cx > int(qhalf_width*2 + deathzone/2)) & (cx <= qhalf_width*3):
+        game.paddle.move(4)
     else:
-        game.paddle.move(5)
+        game.paddle.move(8)
 
 
 def showImages(frame, image_contours, image_threshed):
@@ -143,6 +159,6 @@ def showImages(frame, image_contours, image_threshed):
 
     cv2.imshow(window_camera, frame)
     if image_contours is not None:
-        cv2.imshow(window_contours, image_contours * 255)
+        cv2.imshow(window_contours, image_contours)
     if image_threshed is not None:
         cv2.imshow(window_threshed, image_threshed)
