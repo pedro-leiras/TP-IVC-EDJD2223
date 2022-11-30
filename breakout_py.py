@@ -1,6 +1,6 @@
 import tkinter as tk
-from etapa1_tp import *
-
+#from etapa1_tp import *
+from etapa2_tp import *
 
 class GameObject(object):
     def __init__(self, canvas, item):

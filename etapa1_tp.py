@@ -15,7 +15,6 @@ def start(game):
     cv2.namedWindow(window_camera)
     camera(cap, game)
 
-
 def camera(cap, game):
     if not cap.isOpened():
         cap.open(0)
