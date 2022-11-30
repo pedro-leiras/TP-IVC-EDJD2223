@@ -9,14 +9,15 @@ track_window = None
 xPrevious = None
 hist = None
 
+
 def start(game):
     cap = cv2.VideoCapture()
     cv2.namedWindow(window_camera)
-    cv2.setMouseCallback(window_camera, onmouse)
+    cv2.setMouseCallback(window_camera, mouseSelectArea)
     camera(cap, game)
 
 
-def onmouse(event, x, y, flags, param):
+def mouseSelectArea(event, x, y, flags, param):
     global drag_start, track_window, selection
 
     if event == cv2.EVENT_LBUTTONDOWN:
@@ -38,10 +39,10 @@ def camera(cap, game):
         cap.open(0)
     ret, image = cap.read()
     image_inverted = image[:, ::-1, :]
-    vis = image_inverted.copy()
+    frame = image_inverted.copy()
 
-    processImage(vis, game)
-    showImages(vis)
+    processImage(frame, game)
+    showImages(frame)
 
     cv2.waitKey(1)
     game.after(1, camera, cap, game)
@@ -61,8 +62,8 @@ def processImage(frame, game):
         cv2.normalize(hist, hist, 0, 255, cv2.NORM_MINMAX)
         hist = hist.reshape(-1)
 
-        vis_roi = frame[y0:y1, x0:x1]
-        cv2.bitwise_not(vis_roi, vis_roi)
+        frame_roi = frame[y0:y1, x0:x1]
+        cv2.bitwise_not(frame_roi, frame_roi)
         frame[mask == 0] = 0
 
     if track_window and track_window[2] > 0 and track_window[3] > 0:
@@ -73,8 +74,8 @@ def processImage(frame, game):
         track_box, track_window = cv2.CamShift(prob, track_window, term_crit)
 
         x, y, w, h = track_window
-        movePaddle(game, x)
         cv2.rectangle(frame, (x, y), (x + w, y + h), 255, 2)
+        movePaddle(game, x)
 
 
 def movePaddle(game, x):
