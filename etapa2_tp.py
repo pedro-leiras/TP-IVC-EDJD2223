@@ -2,12 +2,14 @@ import cv2
 import numpy as np
 
 window_camera = "Camera"
+window_mask = "Mask"
 
 selection = None
-drag_start = None
-track_window = None
+dragStart = None
+trackWindow = None
 xPrevious = None
 hist = None
+backproj = None
 
 
 def start(game):
@@ -15,23 +17,6 @@ def start(game):
     cv2.namedWindow(window_camera)
     cv2.setMouseCallback(window_camera, mouseSelectArea)
     camera(cap, game)
-
-
-def mouseSelectArea(event, x, y, flags, param):
-    global drag_start, track_window, selection
-
-    if event == cv2.EVENT_LBUTTONDOWN:
-        drag_start = (x, y)
-        track_window = None
-    if drag_start:
-        xmin = min(x, drag_start[0])
-        ymin = min(y, drag_start[1])
-        xmax = max(x, drag_start[0])
-        ymax = max(y, drag_start[1])
-        selection = (xmin, ymin, xmax, ymax)
-    if event == cv2.EVENT_LBUTTONUP:
-        drag_start = None
-        track_window = (xmin, ymin, xmax - xmin, ymax - ymin)
 
 
 def camera(cap, game):
@@ -42,39 +27,60 @@ def camera(cap, game):
     frame = image_inverted.copy()
 
     processImage(frame, game)
-    showImages(frame)
+    showImages(frame, backproj)
 
     cv2.waitKey(1)
     game.after(1, camera, cap, game)
 
 
+def mouseSelectArea(event, x, y, flags, param):
+    global dragStart, trackWindow, selection
+
+    if event == cv2.EVENT_LBUTTONDOWN:
+        dragStart = (x, y)
+        trackWindow = None
+    if dragStart:
+        xmin = min(x, dragStart[0])
+        ymin = min(y, dragStart[1])
+        xmax = max(x, dragStart[0])
+        ymax = max(y, dragStart[1])
+        selection = (xmin, ymin, xmax, ymax)
+    if event == cv2.EVENT_LBUTTONUP:
+        dragStart = None
+        trackWindow = (xmin, ymin, xmax - xmin, ymax - ymin)
+
+
 def processImage(frame, game):
-    global selection, track_window, drag_start, hist
+    global selection, trackWindow, dragStart, hist, backproj
 
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    # mascara de segmentacao com as margens de hsv
     mask = cv2.inRange(hsv, np.array((0., 60., 32.)), np.array((180., 255., 255.)))
 
+    #se existir uma area selecionada com o rato
     if selection:
         x0, y0, x1, y1 = selection
-        hsv_roi = hsv[y0:y1, x0:x1]
-        mask_roi = mask[y0:y1, x0:x1]
-        hist = cv2.calcHist([hsv_roi], [0], mask_roi, [16], [0, 180])
-        cv2.normalize(hist, hist, 0, 255, cv2.NORM_MINMAX)
-        hist = hist.reshape(-1)
+        hsv_roi = hsv[y0:y1, x0:x1] #o hsv dentro dos pontos da área selecionada
+        mask_roi = mask[y0:y1, x0:x1] #a mascara dentro dos pontos da área selecionada
+        hist = cv2.calcHist([hsv_roi], [0], mask_roi, [16], [0, 180]) #obtem o histograma
+        cv2.normalize(hist, hist, 0, 255, cv2.NORM_MINMAX) #transforma os valores em 0 ou 255
+        hist = hist.reshape(-1) #altera a forma do array para 1 dimensao
 
         frame_roi = frame[y0:y1, x0:x1]
-        cv2.bitwise_not(frame_roi, frame_roi)
-        frame[mask == 0] = 0
+        cv2.bitwise_not(frame_roi, frame_roi) #permite ilustrar a area que esta a ser selecionada pelo rato
 
-    if track_window and track_window[2] > 0 and track_window[3] > 0:
-        selection = None
-        prob = cv2.calcBackProject([hsv], [0], hist, [0, 180], 1)
-        prob &= mask
+    if trackWindow and trackWindow[2] > 0 and trackWindow[3] > 0: #se existir área selecionada e a sua largura e altura for maior que 0
+        selection = None #evita voltar a fazer o histograma
+        backproj = cv2.calcBackProject([hsv], [0], hist, [0, 180], 1)
+        backproj &= mask
         term_crit = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 1)
-        track_box, track_window = cv2.CamShift(prob, track_window, term_crit)
+        track_box, trackWindow = cv2.CamShift(backproj, trackWindow, term_crit)
 
-        x, y, w, h = track_window
-        cv2.rectangle(frame, (x, y), (x + w, y + h), 255, 2)
+        x, y, w, h = trackWindow
+        #cv2.rectangle(frame, (x, y), (x + w, y + h), (0,255,0), 2)
+        pts = cv2.boxPoints(track_box)
+        pts = np.int0(pts)
+        cv2.polylines(frame, [pts], True, (0,255,0), 2)
         movePaddle(game, x)
 
 
@@ -90,6 +96,8 @@ def movePaddle(game, x):
     xPrevious = x
 
 
-def showImages(frame):
+def showImages(frame, backgroundMask):
     global window_camera
     cv2.imshow(window_camera, frame)
+    if backgroundMask is not None:
+        cv2.imshow(window_mask, backgroundMask)
