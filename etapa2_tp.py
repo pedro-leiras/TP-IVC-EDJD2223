@@ -76,8 +76,9 @@ def processImage(frame, game):
         term_crit = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 1)
         track_box, trackWindow = cv2.CamShift(backproj, trackWindow, term_crit)  #aplica o camshift na imagem com as features
 
-        #desenha e une com os pontos da localizacao do objeto obtidos no camshift
+        #desenha e une com os pontos da area de localizacao do objeto obtido no camshift
         pts = cv2.boxPoints(track_box)
+        print(pts)
         pts = np.int0(pts)
         cv2.polylines(frame, [pts], True, (0,255,0), 2)
 
