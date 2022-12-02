@@ -70,17 +70,18 @@ def processImage(frame, game):
         cv2.bitwise_not(frame_roi, frame_roi) #permite ilustrar a area que esta a ser selecionada pelo rato
 
     if trackWindow and trackWindow[2] > 0 and trackWindow[3] > 0: #se existir área selecionada e a sua largura e altura for maior que 0
-        selection = None #evita voltar a fazer o histograma
-        backproj = cv2.calcBackProject([hsv], [0], hist, [0, 180], 1)
-        backproj &= mask
+        selection = None #evita voltar a fazer o histograma feito acima
+        backproj = cv2.calcBackProject([hsv], [0], hist, [0, 180], 1) #procura na imagem por features atraves do histograma feito acima
+        backproj &= mask #aplica a mascara na imagem apenas com as features
         term_crit = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 1)
-        track_box, trackWindow = cv2.CamShift(backproj, trackWindow, term_crit)
+        track_box, trackWindow = cv2.CamShift(backproj, trackWindow, term_crit)  #aplica o camshift na imagem com as features
 
-        x, y, w, h = trackWindow
-        #cv2.rectangle(frame, (x, y), (x + w, y + h), (0,255,0), 2)
+        #desenha e une com os pontos da feature obtidos no camshift
         pts = cv2.boxPoints(track_box)
         pts = np.int0(pts)
         cv2.polylines(frame, [pts], True, (0,255,0), 2)
+
+        x, y, w, h = trackWindow
         movePaddle(game, x)
 
 
@@ -88,6 +89,7 @@ def movePaddle(game, x):
     global xPrevious
 
     if xPrevious:
+        #margem de erro (a diferença positiva entre o x anterior e x atual)
         if abs(xPrevious - x) > 2:
             if x < xPrevious:
                 game.paddle.move(-10)
