@@ -1,7 +1,7 @@
 import cv2
 
 window_camera = "Camera"
-window_faces = "Faces detection"
+window_faces = "Face detection"
 face_cascade = cv2.CascadeClassifier('./haarcascade_frontalface_default.xml')
 image_faces = None
 
@@ -28,26 +28,26 @@ def camera(cap, game):
 
 def processImage(frame, game):
     global image_faces
+    wMax = 0
+    hMax = 0
     faces = face_cascade.detectMultiScale(frame)
     image_faces = frame.copy()
-    if len(faces) != 0:
-        xMax = faces[0][0]
-        yMax = faces[0][1]
-        wMax = faces[0][2]
-        hMax = faces[0][3]
+    if len(faces) != 0: #se existir alguma cara detetada
         for (x, y, w, h) in faces:
-            if w*h > wMax*hMax:
+            if w*h > wMax*hMax: #se a area do retangulo onde tem a cara for a maior
                 wMax = w
                 hMax = h
                 xMax = x
                 yMax = y
+        #apenas desenha o retangulo na detecao com maior area
         cv2.rectangle(image_faces, (xMax, yMax), (xMax + wMax, yMax + hMax), (0, 255, 0), 2)
         movePaddle(game, xMax)
 
 
-def movePaddle(game, objectX):
-    coords = game.paddle.get_position()
-    x = objectX - coords[0]
+def movePaddle(game, faceX):
+    coords = game.paddle.get_position() #obtem as cordenadas do paddle
+    #x = valor que deve ser somado/subtraido à cordenada X do paddle para ficar na mesma posicao X que a cara
+    x = faceX - coords[0]
     game.paddle.move(x)
 
 
